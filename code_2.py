@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -19,36 +20,203 @@ matsCount = 0
 matsSpawned = 0
 selected_character = "pics/Runner1.png"  # ברירת מחדל
 
+
+def create_wood_frame():
+    # יצירת מסגרת עץ לא סימטרית
+    width, height = 700, 400
+    frame = pygame.Surface((width, height), pygame.SRCALPHA)
+
+    # צבעי בסיס לעץ
+    wood_colors = [
+        (139, 69, 19),  # חום כהה
+        (160, 82, 45),  # חום בינוני
+        (205, 133, 63)  # חום בהיר
+    ]
+
+    # יצירת טקסטורת עץ בסיסית עם גלים
+    for y in range(height):
+        wave = math.sin(y * 0.05) * 10
+        color = random.choice(wood_colors)
+        thickness = random.randint(2, 4)
+        pygame.draw.line(frame, color,
+                         (0 + wave, y),
+                         (width + wave, y),
+                         thickness)
+
+    # הוספת חריצים וחתכים אקראיים
+    for _ in range(50):
+        x = random.randint(0, width)
+        y = random.randint(0, height)
+        length = random.randint(20, 60)
+        angle = random.randint(0, 360)
+        color = (101, 67, 33)  # חום כהה לחריצים
+
+        end_x = x + math.cos(math.radians(angle)) * length
+        end_y = y + math.sin(math.radians(angle)) * length
+        pygame.draw.line(frame, color, (x, y), (end_x, end_y), 2)
+
+    return frame
+
+
+def carve_text(text, progress):
+    # יצירת טקסט חרוט עם אפקט תלת-ממדי
+    font = pygame.font.Font("ganclm_bold-webfont.woff", 60)
+    text_surface = pygame.Surface((400, 100), pygame.SRCALPHA)
+
+    # שכבות עומק לאפקט תלת-ממדי
+    depth_layers = 5
+    for i in range(depth_layers):
+        offset = i * 2
+        shade = 255 - (i * 40)
+        color = (shade, shade // 2, 0)
+        layer = font.render(text, True, color)
+        text_surface.blit(layer, (offset, offset))
+
+    # חיתוך הדרגתי של הטקסט
+    carved = pygame.Surface((400, 100), pygame.SRCALPHA)
+    carved.blit(text_surface, (0, 0))
+    mask = pygame.Surface((400, 100))
+    mask.fill((255, 255, 255))
+    mask.set_alpha(int(255 * progress))
+    carved.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+    return carved
+
+
+
+
+
 def game_over_screen():
     screen.fill("black")
-    font = pygame.font.Font("ganclm_bold-webfont.woff", 50)
+    font = pygame.font.Font("ganclm_bold-webfont.woff", 70)
+    small_font = pygame.font.Font("ganclm_bold-webfont.woff", 30)
 
+    # טעינת צלילים
     try:
-        background = pygame.image.load("pics/Run_Screen_Background.jpg")
-        background = pygame.transform.scale(background, (1080, 520))
-        screen.blit(background, (0, 0))
+        lose_sound = pygame.mixer.Sound("sounds/Lose_Sound.mp3")
+        lose_sound.play()
+    except Exception as e:
+        print(f"שגיאה בטעינת צלילים: {e}")
+
+    # טעינת תמונת Game Over
+    try:
+        game_over_img = pygame.image.load("pics/game-over-icon- (1).webp")
+        game_over_img = pygame.transform.scale(game_over_img, (500, 300))
     except:
-        pass
+        # אם אין תמונה, יוצר טקסט במקום
+        game_over_img = font.render("GAME OVER", True, (255, 0, 0))
+        game_over_img = pygame.transform.scale(game_over_img, (400, 100))
 
-    game_over_text = font.render("!תדספה", True, "red")
-    text_rect = game_over_text.get_rect(center=(540, 200))
-    screen.blit(game_over_text, text_rect)
+    # יצירת מסגרת עץ עם אפקט שקיפות
+    wood_frame = pygame.Surface((600, 400), pygame.SRCALPHA)
+    wood_colors = [(139, 69, 19, 200), (160, 82, 45, 200), (101, 67, 33, 200)]  # גווני חום עם שקיפות
 
-    restart_text = font.render("שדחמ ליחתהל ידכ ץחל", True, "white")
-    restart_rect = restart_text.get_rect(center=(540, 300))
-    screen.blit(restart_text, restart_rect)
+    # יצירת טקסטורת עץ
+    for y in range(0, 400, 2):
+        color = random.choice(wood_colors)
+        pygame.draw.line(wood_frame, color, (0, y), (600, y), 2)
 
-    pygame.display.flip()
+    # כפתורים
+    restart_btn = pygame.Surface((200, 50))
+    restart_btn.fill((219, 153, 90))
+    restart_text = small_font.render("שדחמ קחשמ", True, (255, 255, 255))
+    restart_rect = pygame.Rect(240, 380, 200, 50)
 
-    waiting = True
-    while waiting:
+    exit_btn = pygame.Surface((200, 50))
+    exit_btn.fill((219, 153, 90))
+    exit_text = small_font.render("האיצי", True, (255, 255, 255))
+    exit_rect = pygame.Rect(640, 380, 200, 50)
+
+    # חלקיקים
+    particles = []
+    for _ in range(30):
+        particles.append({
+            'x': random.randint(240, 840),
+            'y': random.randint(60, 460),
+            'speed': random.uniform(0.2, 0.8),
+            'size': random.randint(1, 3),
+            'alpha': random.randint(0, 50)
+        })
+
+    start_time = pygame.time.get_ticks()
+    alpha = 0  # לאפקט הופעה הדרגתית
+    running = True
+
+    while running:
+        current_time = pygame.time.get_ticks()
+        elapsed_time = current_time - start_time
+
+        # רקע כהה של המסך
+        screen.fill((20, 10, 30))
+
+        # מסגרת עץ עם אפקט הופעה הדרגתי
+        alpha = min(200, int(elapsed_time / 10))
+        wood_frame.set_alpha(alpha)
+        screen.blit(wood_frame, (240, 60))
+
+        # תמונת Game Over במרכז
+        if alpha > 55:  # מופיע רק אחרי שהמסגרת מתחילה להיראות
+            img_alpha = min(255, int((elapsed_time - 1000) / 2))
+            temp_img = game_over_img.copy()
+            temp_img.set_alpha(img_alpha)
+            img_rect = temp_img.get_rect(center=(540, 200))
+            screen.blit(temp_img, img_rect)
+
+        # עדכון וציור חלקיקים
+        for particle in particles[:]:
+            particle['y'] -= particle['speed']
+            if particle['y'] < 60:
+                particle['y'] = 460
+                particle['x'] = random.randint(240, 840)
+
+            particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+            pygame.draw.circle(particle_surface, (225, 0, 0, particle['alpha']),#עושה צבע זיקוק אדום
+                               (particle['size'], particle['size']), particle['size'])
+            screen.blit(particle_surface, (particle['x'], particle['y']))
+
+        # כפתורים עם אפקט hover
+        mouse_pos = pygame.mouse.get_pos()
+
+        if restart_rect.collidepoint(mouse_pos):
+            scaled_restart = pygame.transform.scale(restart_btn, (225, 0))
+            screen.blit(scaled_restart, (restart_rect.x - 5, restart_rect.y - 2))
+        else:
+            screen.blit(restart_btn, restart_rect)
+
+        if exit_rect.collidepoint(mouse_pos):
+            scaled_exit = pygame.transform.scale(exit_btn, (0, 225))
+            screen.blit(scaled_exit, (exit_rect.x - 5, exit_rect.y - 2))
+        else:
+            screen.blit(exit_btn, exit_rect)
+
+        # טקסט הכפתורים
+        screen.blit(restart_text, (restart_rect.centerx - restart_text.get_width() // 2,
+                                   restart_rect.centery - restart_text.get_height() // 2))
+        screen.blit(exit_text, (exit_rect.centerx - exit_text.get_width() // 2,
+                                exit_rect.centery - exit_text.get_height() // 2))
+
+        pygame.display.flip()
+        clock.tick(60)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
-                waiting = False
-                startScreen()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if restart_rect.collidepoint(event.pos):
+                    global lives, matsCount, matsSpawned
+                    lives = 3
+                    matsCount = 0
+                    matsSpawned = 0
+                    startScreen()
+                    return
+                elif exit_rect.collidepoint(event.pos):
+                    pygame.quit()
+                    exit()
+
+                    exit()
+
+
 
 
 def startScreen():
@@ -267,9 +435,11 @@ def show_instructions():
                 if back_btn.collidepoint(event.pos):
                     startScreen()
 
+
 def baseScreen():
     screen.fill("black")
     font = pygame.font.Font("ganclm_bold-webfont.woff", 50)
+    small_font = pygame.font.Font("ganclm_bold-webfont.woff", 30)
 
     try:
         background = pygame.image.load("pics/Run_Screen_Background.jpg")
@@ -294,6 +464,8 @@ def baseScreen():
     title = font.render("!רצבמה תא םינוב", True, "white")
     screen.blit(title, (400, 50))
 
+    # שלב בניית המבצר
+    last_construction = None
     for stage in construction_stages:
         try:
             construction = pygame.image.load(stage)
@@ -303,23 +475,57 @@ def baseScreen():
             screen.blit(construction, (290, 100))
             pygame.display.flip()
             pygame.time.wait(800)
+            last_construction = construction
         except:
             print(f"{stage} :הנומת ןועטל ןתינ אל")
 
-    finish_text = font.render("!החלצהב םלשוה רצבמה", True, "white")
-    screen.blit(finish_text, (350, 450))
-    pygame.display.flip()
+    # הגדרת כפתורים
+    buttons = {
+        "שדח קחשמ": pygame.Rect(340, 400, 180, 50),
+        "האיצי": pygame.Rect(560, 400, 180, 50)
+    }
 
-    waiting = True
-    while waiting:
+    # לולאת המסך הסופי
+    running = True
+    while running:
+        screen.blit(background, (0, 0))
+        if last_construction:
+            screen.blit(last_construction, (290, 100))
+
+        # כותרת הניצחון
+        finish_text = font.render("!החלצהב םלשוה רצבמה", True, "white")
+        screen.blit(finish_text, (350, 50))
+
+        # ציור כפתורים
+        for text, button in buttons.items():
+            mouse_pos = pygame.mouse.get_pos()
+
+            if button.collidepoint(mouse_pos):
+                color = (255, 180, 0)  # צבע hover
+            else:
+                color = (255, 140, 0)  # צבע רגיל
+
+            pygame.draw.rect(screen, color, button, 0, 15)
+            pygame.draw.rect(screen, (139, 69, 19), button, 3, 15)
+
+            text_surface = small_font.render(text, True, "white")
+            text_rect = text_surface.get_rect(center=button.center)
+            screen.blit(text_surface, text_rect)
+
+        pygame.display.flip()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
-                waiting = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos
+                if buttons["שדח קחשמ"].collidepoint(mouse_pos):
+                    return "restart"
+                elif buttons["האיצי"].collidepoint(mouse_pos):
+                    pygame.quit()
+                    exit()
 
-    pygame.quit()
 
 def choose_character_screen():
     global selected_character
